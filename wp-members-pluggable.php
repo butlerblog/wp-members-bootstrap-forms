@@ -5,326 +5,105 @@
 * a chance that versions of the plugin later than 2.9.9.1 may not work with this method.
 */
 
-
-/**
- * Login Dialog
+/*
+ * Rewriting the functions is not a good way to approach these changes.  A better method is to 
+ * use the filter hooks in the process to change the tags accordingly.  Interestingly, those 
+ * filter hooks are actually documented right in the very function that was being edited.
  *
- * Loads the login form for user login
- *
- * @since 1.8
- *
- * @uses wpmem_login_form()
- *
- * @param  string $page
- * @param  string $redirect_to
- * @return string $str the generated html for the login form
+ * I've replaced the login form function changes with the appropriate filter functions in the 
+ * hopes that it might serve as an example of the preferred/correct method of making changes
+ * that will leave your application sustainable so that you can upgrade without making your 
+ * changes obsolete.  Additionally, it takes what needed over 300 lines of extra code and
+ * reduces it to around 80 (including comments).
  */
-function wpmem_inc_login( $page="page", $redirect_to = null )
-{ 	
-	global $wpmem_regchk;
 
-	$str = '';
-
-	if( $page == "page" ){
-	     if( $wpmem_regchk!="success" ){
-
-			$arr = get_option( 'wpmembers_dialogs' );
-			
-			// this shown above blocked content
-			$str = '<h4>Sell Sheets  |  Art Files  |  Order Forms</h4>';
-			//$str .= '<p>' . __( stripslashes( $arr[0] ), 'wp-members' ) . '</p>';
-			
-			/**
-			 * Filter the post restricted message.
-			 *
-			 * @since 2.7.3
-			 *
-			 * @param string $str The post restricted message.
-		 	 */
-			//$str = apply_filters( 'wpmem_restricted_msg', $str );
-
-		} 	
-	} 
-	
-	/** create the default inputs **/
-	$default_inputs = array(
-		array(
-			'name'   => __( 'Username' ), 
-			'type'   => 'text', 
-			'tag'    => 'log',
-			'class'  => 'form-control',
-			'div'    => 'col-sm-8'
-		),
-		array( 
-			'name'   => __( 'Password' ), 
-			'type'   => 'password', 
-			'tag'    => 'pwd', 
-			'class'  => 'form-control',
-			'div'    => 'col-sm-8'
-		)
-	);
-	
-	/**
-	 * Filter the array of login form fields.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param array $default_inputs An array matching the elements used by default.
- 	 */
-	$default_inputs = apply_filters( 'wpmem_inc_login_inputs', $default_inputs );
-	
-    $defaults = array( 
-		'heading'      => __( 'Established Users', 'wp-members' ), 
-		'action'       => 'login', 
-		'button_text'  => __( 'Log In' ),
-		'inputs'       => $default_inputs,
-		'redirect_to'  => $redirect_to
-	);	
-
-	/**
-	 * Filter the arguments to override login form defaults.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param array $args An array of arguments to use. Default null.
- 	 */
-	$args = apply_filters( 'wpmem_inc_login_args', '' );
-
-	$arr  = wp_parse_args( $args, $defaults );
-
-	$str .= "<div class=\"row grey\"><div class=\"col-sm-6 grey\">";
-	$str  = $str . wpmem_login_form( $page, $arr );
-	$str .= "</div>\n";
-	$str .= "<div class=\"col-sm-6\">";
-	$str .= "<h3>New Users</h3>\n";
-	$str .= "<p>If you are a Dutch Cheese Maker broker or customer and would like to apply for access, click \"Create Account\" and enter the information requested on the next page.</p>\n";
-
-	$link = apply_filters( 'wpmem_reg_link', WPMEM_REGURL );
-	$str  .= '<div style="text-align:center;"><a class="btn btn-primary contact-btn" href="' . $link . '">Create Account</a></div>';
-		
-	$str .= "</div>\n";
-	$str .= "</div>\n";
-	return $str;
+add_filter( 'wpmem_restricted_msg', 'my_restricted_msg' );
+function my_restricted_msg( $str ) {
+	return '<h4>Sell Sheets  |  Art Files  |  Order Forms</h4>';
 }
-/**
- * Login Form Dialog
- *
- * Builds the form used for login, change password, and reset password.
- *
- * @since 2.5.1
- *
- * @param  string $page 
- * @param  array  $arr   The elements needed to generate the form (login|reset password|forgotten password)
- * @return string $form  The HTML for the form as a string
- */
-function wpmem_login_form( $page, $arr ) 
-{
-	// extract the arguments array
-	extract( $arr );
 
-	// set up default wrappers
-	$defaults = array(
-		
-		// wrappers
+/**
+ * Since the login and password change/reset forms need
+ * the same custom classes, the same function can be used
+ * for all three of these filters.
+ */
+add_filter( 'wpmem_inc_login_inputs',          'my_custom_inputs' );
+add_filter( 'wpmem_inc_changepassword_inputs', 'my_custom_inputs' );
+add_filter( 'wpmem_inc_resetpassword_inputs',  'my_custom_inputs' );
+function my_custom_inputs( $default_inputs ) {
+	$default_inputs[0]['class'] = 'form-control';
+	$default_inputs[0]['div']   = 'col-sm-8';
+	$default_inputs[1]['class'] = 'form-control';
+	$default_inputs[1]['div']   = 'col-sm-8';
+	return $default_inputs;
+}
+
+add_filter( 'wpmem_inc_login_args', 'my_inc_login_args' );
+function my_inc_login_args( $args ) {
+	$args['heading'] = 'Established Users';
+	return $args;
+}
+
+/**
+ * This filter actually handles the login form, the password reset form,
+ * the change password form, and the new forgot username form.
+ */
+add_filter( 'wpmem_login_form', 'my_login_form', 10, 2 );
+function my_login_form( $form, $toggle ) {
+	global $wpmem;
+	// Put the custom opening div wrappers before original form HTML
+	$form = "<div class=\"row grey\"><div class=\"col-sm-6 grey\">" . $form;
+	// Continue with custom HTML that comes after the form HTML.
+	$form .= "</div>\n";
+	$form .= "<div class=\"col-sm-6\">";
+	$form .= "<h3>New Users</h3>\n";
+	$form .= "<p>If you are a Dutch Cheese Maker broker or customer and would like to apply for access, click \"Create Account\" and enter the information requested on the next page.</p>\n";
+	$form .= '<div style="text-align:center;"><a class="btn btn-primary contact-btn" href="' . $wpmem->user_pages['register'] . '">Create Account</a></div>';
+	$form .= "</div>\n";
+	$form .= "</div>\n";
+	return $form;
+}
+
+/**
+ * This filter actually handles the login form, the password reset form,
+ * the change password form, and the new forgot username form.
+ */
+add_filter( 'wpmem_login_form_args', 'my_login_form_args', 10, 2 );
+function my_login_form_args( $args, $action ) {
+	$args = array( 
 		'heading_before'  => '<h3>',
 		'heading_after'   => '</h3>',
 		'fieldset_before' => '<div class="form-group">',
 		'fieldset_after'  => '</div>',
-		'main_div_before' => '<div id="wpmem_login">',
-		'main_div_after'  => '</div>',
-		'txt_before'      => '[wpmem_txt]',
-		'txt_after'       => '[/wpmem_txt]',
-		'row_before'      => '',
-		'row_after'       => '',
 		'buttons_before'  => '<div class="form-group"><div class="col-sm-offset-4 col-sm-8">',
 		'buttons_after'   => '</div></div>',
 		'link_before'     => '<div class="row"><div class="col-sm-offset-2 col-sm-10">',
 		'link_after'      => '</div></div>',
-		
-		// classes & ids
-		'form_id'         => '',
 		'form_class'      => 'form-horizontal',
-		'button_id'       => '',
 		'button_class'    => 'btn btn-primary contact-btn',
-		
-		// other
-		'strip_breaks'    => true,
-		'wrap_inputs'     => true,
-		'remember_check'  => true,
-		'n'               => "\n",
-		't'               => "\t",
-		'redirect_to'     => ( isset( $_REQUEST['redirect_to'] ) ) ? esc_url( $_REQUEST['redirect_to'] ) : ( ( isset( $redirect_to ) ) ? $redirect_to : get_permalink() )
-		
 	);
-	
-	/**
-	 * Filter the default form arguments.
-	 *
-	 * This filter accepts an array of various elements to replace the form defaults. This
-	 * includes default tags, labels, text, and small items including various booleans.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param array          An array of arguments to merge with defaults. Default null.
-	 * @param string $action The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$args = apply_filters( 'wpmem_login_form_args', '', $action );
-	
-	// merge $args with defaults and extract
-	extract( wp_parse_args( $args, $defaults ) );
-	
-	// build the input rows
-	foreach ( $inputs as $input ) {
-		$label = '<label for="' . $input['tag'] . '" class="col-sm-4 control-label">' . $input['name'] . '</label>';
-		$field = wpmem_create_formfield( $input['tag'], $input['type'], '', '', $input['class'] );
-		$field_before = ( $wrap_inputs ) ? '<div class="' . $input['div'] . '">' : '';
-		$field_after  = ( $wrap_inputs ) ? '</div>' : '';
-		$rows[] = array( 
-			'row_before'   => $row_before,
-			'label'        => $label,
-			'field_before' => $field_before,
-			'field'        => $field,
-			'field_after'  => $field_after,
-			'row_after'    => $row_after
-		);
-	}
-	
-	/**
-	 * Filter the array of form rows.
-	 *
-	 * This filter receives an array of the main rows in the form, each array element being
-	 * an array of that particular row's pieces. This allows making changes to individual 
-	 * parts of a row without needing to parse through a string of HTML.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param array  $rows   An array containing the form rows.
-	 * @param string $action The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$rows = apply_filters( 'wpmem_login_form_rows', $rows, $action );
-	
-	// put the rows from the array into $form
-	$form = '';
-	foreach( $rows as $row_item ) {
-		$row  = ( $row_item['row_before']   != '' ) ? $row_item['row_before'] . $n . $row_item['label'] . $n : $row_item['label'] . $n;
-		$row .= ( $row_item['field_before'] != '' ) ? $row_item['field_before'] . $n . $t . $row_item['field'] . $n . $row_item['field_after'] . $n : $row_item['field'] . $n;
-		$row .= ( $row_item['row_before']   != '' ) ? $row_item['row_after'] . $n : '';
-		$form.= $row;
-	}
+	return $args;
+}
 
-	// build hidden fields, filter, and add to the form
-	//$redirect_to = ( isset( $_REQUEST['redirect_to'] ) ) ? esc_url( $_REQUEST['redirect_to'] ) : get_permalink();
-	$hidden = wpmem_create_formfield( 'redirect_to', 'hidden', $redirect_to ) . $n;
-	$hidden = $hidden . wpmem_create_formfield( 'a', 'hidden', $action ) . $n;
-	$hidden = ( $action != 'login' ) ? $hidden . wpmem_create_formfield( 'formsubmit', 'hidden', '1' ) : $hidden;
+/**
+ * This filter actually handles the login form, the password reset form,
+ * the change password form, and the new forgot username form.
+ */
+add_filter( 'wpmem_login_form_rows', 'my_login_form_rows', 10, 2 );
+function my_login_form_rows( $rows, $action ) {
+	// Set up replacement variables.
+	$old = '<label';
+	$new = '<label class="col-sm-4 control-label" ';
+	// str_replace on the label tag to slip in custom class.
+	$rows[0]['label'] = str_replace( $old, $new, $rows[0]['label'] );
+	$rows[1]['label'] = str_replace( $old, $new, $rows[1]['label'] );
+	
+	return $rows;
+}
 
-	/**
-	 * Filter the hidden field HTML.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param string $hidden The generated HTML of hidden fields.
-	 * @param string $action The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$form = $form . apply_filters( 'wpmem_login_hidden_fields', $hidden, $action );
 
-	// build the buttons, filter, and add to the form
-	if ( $action == 'login' ) {
-		$remember_check = ( $remember_check ) ? $t . wpmem_create_formfield( 'rememberme', 'checkbox', 'forever' ) . '&nbsp;' . __( 'Remember Me' ) . '&nbsp;&nbsp;' . $n : '';
-		$buttons =  $remember_check . $t . '<input type="submit" name="Submit" value="' . $button_text . '" class="' . $button_class . '" />' . $n;
-	} else {
-		$buttons = '<input type="submit" name="Submit" value="' . $button_text . '" class="' . $button_class . '" />' . $n;
-	}
-	
-	/**
-	 * Filter the HTML for form buttons.
-	 *
-	 * The string includes the buttons, as well as the before/after wrapper elements.
-	 *
-	 * @since 2.9.0
-	 *
-	 * @param string $buttons The generated HTML of the form buttons.
-	 * @param string $action  The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$form = $form . apply_filters( 'wpmem_login_form_buttons', $buttons_before . $n . $buttons . $buttons_after . $n, $action );
+// I didn't do the registration form - same principles as above apply.
 
-	if ( ( WPMEM_MSURL != null || $page == 'members' ) && $action == 'login' ) { 
-		
-		/**
-		 * Filter the forgot password link.
-		 *
-		 * @since 2.8.0
-		 *
-		 * @param string The forgot password link.
-	 	 */
-		$link = apply_filters( 'wpmem_forgot_link', wpmem_chk_qstr( WPMEM_MSURL ) . 'a=pwdreset' );	
-		$str  = __( 'Forgot password?', 'wp-members' ) . '&nbsp;<a href="' . $link . '">' . __( 'Click here to reset', 'wp-members' ) . '</a>';
-		$form = $form . $link_before . apply_filters( 'wpmem_forgot_link_str', $str ) . $link_after . $n;
-		
-	}
-	
-	if ( ( WPMEM_REGURL != null ) && $action == 'login' ) { 
-
-		/**
-		 * Filter the link to the registration page.
-		 *
-		 * @since 2.8.0
-		 *
-		 * @param string The registration page link.
-	 	 */
-	/*	 
-		$link = apply_filters( 'wpmem_reg_link', WPMEM_REGURL );
-		$str  = __( 'New User?', 'wp-members' ) . '&nbsp;<a href="' . $link . '">' . __( 'Click here to register', 'wp-members' ) . '</a>';
-		$form = $form . $link_before . apply_filters( 'wpmem_reg_link_str', $str ) . $link_after . $n;
-	*/
-	}			
-	
-	// apply the heading
-	$form = $heading_before . $heading . $heading_after . $n . $form;
-	
-	// apply fieldset wrapper
-	$form = $fieldset_before . $n . $form . $fieldset_after . $n;
-	
-	// apply form wrapper
-	$form = '<form action="' . get_permalink() . '" method="POST" id="' . $form_id . '" class="' . $form_class . '">' . $n . $form . '</form>';
-	
-	// apply anchor
-	$form = '<a name="login"></a>' . $n . $form;
-	
-	// apply main wrapper
-	$form = $main_div_before . $n . $form . $n . $main_div_after;
-	
-	// apply wpmem_txt wrapper
-	$form = $txt_before . $form . $txt_after;
-	
-	// remove line breaks
-	$form = ( $strip_breaks ) ? str_replace( array( "\n", "\r", "\t" ), array( '','','' ), $form ) : $form;
-	
-	/**
-	 * Filter the generated HTML of the entire form.
-	 *
-	 * @since 2.7.4
-	 *
-	 * @param string $form   The HTML of the final generated form.
-	 * @param string $action The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$form = apply_filters( 'wpmem_login_form', $form, $action );
-	
-	/**
-	 * Filter before the form.
-	 *
-	 * This rarely used filter allows you to stick any string onto the front of
-	 * the generated form.
-	 *
-	 * @since 2.7.4
-	 *
-	 * @param string $str    The HTML to add before the form. Default null.
-	 * @param string $action The action being performed by the form. login|pwdreset|pwdchange.
- 	 */
-	$form = apply_filters( 'wpmem_login_form_before', '', $action ) . $form;
-	
-	return $form;
-} // end wpmem_login_form
 /**
  * Registration Form Dialog
  *
