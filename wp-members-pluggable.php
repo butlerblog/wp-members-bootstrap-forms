@@ -1,3 +1,5 @@
+<?php // Do not use this line
+
 /**
 * These are rewrites of the functions which govern output of most of the forms for the WP-Members
 * plugin for use with Twitter Bootstrap.  Note, this code uses pluggable functions, and should be placed
